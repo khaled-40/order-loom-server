@@ -3,6 +3,7 @@ const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 require('dotenv').config();
+const stripe = require('stripe')(`${process.env.STRIPE_SECRET}`);
 const port = process.env.PORT || 3000;
 
 // middlewire
@@ -41,35 +42,73 @@ async function getCollections() {
 
 getCollections().catch(console.error);
 
+
+// Product related APIs
+
 app.get('/latest-products', async (req, res) => {
-  const { productsCollection } = await getCollections();
-  const cursor = productsCollection.find().sort({ date: -1 }).limit(6);
-  const result = await cursor.toArray();
-  res.send(result);
+    const { productsCollection } = await getCollections();
+    const cursor = productsCollection.find().sort({ date: -1 }).limit(6);
+    const result = await cursor.toArray();
+    res.send(result);
 })
 
-app.get('/products', async(req,res) => {
-    const {productsCollection} = await getCollections();
+app.get('/products', async (req, res) => {
+    const { productsCollection } = await getCollections();
     const cursor = productsCollection.find();
     const result = await cursor.toArray();
     res.send(result)
 })
 
-app.get('/products/:id', async(req,res) => {
-    const {productsCollection} = await getCollections();
+app.get('/products/:id', async (req, res) => {
+    const { productsCollection } = await getCollections();
     const id = req.params.id;
-    const query = {_id: new ObjectId(id)};
+    const query = { _id: new ObjectId(id) };
     const result = await productsCollection.findOne(query);
     res.send(result)
 })
 
 app.post('/products', async (req, res) => {
-  const { productsCollection } = await getCollections();
-//   console.log(req.headers)
-  const newProduct = req.body;
-  const result = await productsCollection.insertOne(newProduct);
-  res.send(result)
+    const { productsCollection } = await getCollections();
+    //   console.log(req.headers)
+    const newProduct = req.body;
+    const result = await productsCollection.insertOne(newProduct);
+    res.send(result)
 })
+
+// app.patch('/products', async(req,res) => {
+//     const {productsCollection} = await getCollections();
+//     const 
+// })
+
+// Payment related APIs
+app.post("/create-checkout-session", async (req, res) => {
+    const {productTitle, quantity,unitPrice}= req.body;
+
+    try {
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            mode: "payment",
+            line_items: [
+                {
+                    price_data: {
+                        currency: "usd",
+                        product_data: {
+                            name: productTitle,
+                        },
+                        unit_amount: Math.round(unitPrice * 100), // cents
+                    },
+                    quantity,
+                },
+            ],
+            success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.CLIENT_URL}/payment-cancel`,
+        });
+
+        res.send({ url: session.url });
+    } catch (error) {
+        res.status(500).send({ error: error.message });
+    }
+});
 
 app.get('/', (req, res) => {
     res.send('Hello World!')
