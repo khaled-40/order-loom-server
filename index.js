@@ -43,6 +43,22 @@ async function getCollections() {
 getCollections().catch(console.error);
 
 
+// user related APIs
+app.post('/users', async (req, res) => {
+    const user = req.body;
+    user.createdAt = new Date();
+    const email = user.email;
+    console.log(email);
+    const userExist = await usersCollection.findOne({ email })
+
+    if (userExist) {
+        return res.send({ message: 'user exists' })
+    }
+    const result = await usersCollection.insertOne(user);
+    res.send(result)
+})
+
+
 // Product related APIs
 
 app.get('/latest-products', async (req, res) => {
@@ -82,7 +98,7 @@ app.post('/products', async (req, res) => {
 
 // Payment related APIs
 app.post("/create-checkout-session", async (req, res) => {
-    const {productTitle, quantity,unitPrice}= req.body;
+    const { productTitle, quantity, unitPrice } = req.body;
 
     try {
         const session = await stripe.checkout.sessions.create({
