@@ -45,6 +45,7 @@ getCollections().catch(console.error);
 
 // user related APIs
 app.post('/users', async (req, res) => {
+    const { usersCollection } = await getCollections();
     const user = req.body;
     user.createdAt = new Date();
     const email = user.email;
@@ -58,6 +59,27 @@ app.post('/users', async (req, res) => {
     res.send(result)
 })
 
+app.get('/users', async (req, res) => {
+    const { usersCollection } = await getCollections();
+    const cursor = usersCollection.find();
+    const result = await cursor.toArray();
+    res.send(result)
+})
+
+app.patch('/users/:id', async (req, res) => {
+    const { usersCollection } = await getCollections();
+    const id = req.params.id;
+    const { status } = req.body;
+    console.log(status)
+    const query = { _id: new ObjectId(id) };
+    const update = {
+        $set: {
+            adminApproval: status
+        }
+    };
+    const result = await usersCollection.updateOne(query, update);
+    res.send(result)
+})
 
 // Product related APIs
 
