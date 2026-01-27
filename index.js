@@ -113,10 +113,26 @@ app.post('/products', async (req, res) => {
     res.send(result)
 })
 
-// app.patch('/products', async(req,res) => {
-//     const {productsCollection} = await getCollections();
-//     const 
-// })
+app.patch('/products', async (req, res) => {
+    const { productsCollection } = await getCollections();
+    const newProduct = req.body;
+
+    const { _id, ...updateFields } = newProduct;
+
+    const query = { _id: new ObjectId(_id) };
+    console.log(updateFields)
+
+    const result = await productsCollection.updateOne(
+        query,
+        { $set: updateFields }
+    );
+
+    if (result.matchedCount === 0) {
+        return res.status(404).json({ error: "Product not found" });
+    }
+
+    res.send(result)
+})
 
 // Payment related APIs
 app.post("/create-checkout-session", async (req, res) => {
