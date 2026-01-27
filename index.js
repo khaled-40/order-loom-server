@@ -134,6 +134,28 @@ app.patch('/products', async (req, res) => {
     res.send(result)
 })
 
+app.delete('/products/:id', async (req, res) => {
+    const { productsCollection } = await getCollections();
+    const id = req.params.id;
+    const query = {_id: new ObjectId(id)};
+    const result = await productsCollection.deleteOne(query);
+    res.send(result)
+})
+
+app.patch('/products/:id/toggle', async(req,res) => {
+    const { productsCollection } = await getCollections();
+    const id = req.params.id;
+    const {toggle} = req.body;
+    const query = {_id: new ObjectId(id)};
+    const update = {
+        $set: {
+            showOnHome: toggle
+        }
+    };
+    const result = await productsCollection.updateOne(query, update);
+    res.send(result)
+})
+
 // Payment related APIs
 app.post("/create-checkout-session", async (req, res) => {
     const { productTitle, quantity, unitPrice } = req.body;
