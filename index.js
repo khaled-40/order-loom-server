@@ -21,10 +21,10 @@ const client = new MongoClient(uri, {
 });
 
 // These will be set on first request
-let productsCollection, usersCollection;
+let productsCollection, usersCollection, ordersCollection;
 
 async function getCollections() {
-    if (productsCollection) return { productsCollection, usersCollection };
+    if (productsCollection) return { productsCollection, usersCollection, ordersCollection };
 
     await client.connect();
 
@@ -34,10 +34,11 @@ async function getCollections() {
 
     const db = client.db('order_loom');
     productsCollection = db.collection('products');
+    ordersCollection = db.collection('orders');
     // contributionCollection = db.collection('contribution');
     usersCollection = db.collection('users');
     console.log('MongoDB connected (reused on next calls)');
-    return { productsCollection, usersCollection };
+    return { productsCollection, usersCollection, ordersCollection };
 }
 
 getCollections().catch(console.error);
@@ -97,6 +98,16 @@ app.get('/products', async (req, res) => {
     res.send(result)
 })
 
+app.get('/products/:email/byEmail', async (req, res) => {
+    const { productsCollection } = await getCollections();
+    const email = req.params.email;
+    console.log(email)
+    const query = { createdByUserEmail: email };
+    const cursor = productsCollection.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
 app.get('/products/:id', async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
@@ -109,6 +120,7 @@ app.post('/products', async (req, res) => {
     const { productsCollection } = await getCollections();
     //   console.log(req.headers)
     const newProduct = req.body;
+    newProduct.createdAt = new Date();
     const result = await productsCollection.insertOne(newProduct);
     res.send(result)
 })
@@ -137,22 +149,43 @@ app.patch('/products', async (req, res) => {
 app.delete('/products/:id', async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
-    const query = {_id: new ObjectId(id)};
+    const query = { _id: new ObjectId(id) };
     const result = await productsCollection.deleteOne(query);
     res.send(result)
 })
 
-app.patch('/products/:id/toggle', async(req,res) => {
+app.patch('/products/:id/toggle', async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
-    const {toggle} = req.body;
-    const query = {_id: new ObjectId(id)};
+    const { toggle } = req.body;
+    const query = { _id: new ObjectId(id) };
     const update = {
         $set: {
             showOnHome: toggle
         }
     };
     const result = await productsCollection.updateOne(query, update);
+    res.send(result)
+})
+
+// Order related APIs 
+app.post('/orders', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const orderInfo = req.body;
+    orderInfo.createdAt = new Date();
+    const { productId, email, status } = orderInfo;
+    const duplicate = await ordersCollection.findOne({
+        productId,
+        email,
+        status: { $in: ['pending'] }
+    });
+
+    if (duplicate) {
+        return res.status(409).send({
+            message: 'You already ordered this item'
+        });
+    }
+    const result = await ordersCollection.insertOne(orderInfo);
     res.send(result)
 })
 
