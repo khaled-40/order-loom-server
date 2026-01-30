@@ -189,6 +189,15 @@ app.post('/orders', async (req, res) => {
     res.send(result)
 })
 
+app.get('/orders', async(req,res) => {
+    const { ordersCollection } = await getCollections();
+    const status = req.params.status;
+    console.log(status);
+    const cursor = ordersCollection.find();
+    const result = await cursor.toArray();
+    res.send(result)
+})
+
 // Payment related APIs
 app.post("/create-checkout-session", async (req, res) => {
     const { productTitle, quantity, unitPrice } = req.body;
