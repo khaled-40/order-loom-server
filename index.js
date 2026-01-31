@@ -21,10 +21,10 @@ const client = new MongoClient(uri, {
 });
 
 // These will be set on first request
-let productsCollection, usersCollection, ordersCollection;
+let productsCollection, usersCollection, ordersCollection, trackingsCollection;
 
 async function getCollections() {
-    if (productsCollection) return { productsCollection, usersCollection, ordersCollection };
+    if (productsCollection) return { productsCollection, usersCollection, ordersCollection, trackingsCollection };
 
     await client.connect();
 
@@ -35,10 +35,11 @@ async function getCollections() {
     const db = client.db('order_loom');
     productsCollection = db.collection('products');
     ordersCollection = db.collection('orders');
+    trackingsCollection = db.collection('trackings');
     // contributionCollection = db.collection('contribution');
     usersCollection = db.collection('users');
     console.log('MongoDB connected (reused on next calls)');
-    return { productsCollection, usersCollection, ordersCollection };
+    return { productsCollection, usersCollection, ordersCollection, trackingsCollection };
 }
 
 getCollections().catch(console.error);
@@ -169,6 +170,17 @@ app.patch('/products/:id/toggle', async (req, res) => {
 })
 
 // Order related APIs 
+app.get('/orders/:email/byEmail', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const email = req.params.email;
+    const status = req.query.status
+    console.log(email)
+    const query = { email, status };
+    const cursor = ordersCollection.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
 app.post('/orders', async (req, res) => {
     const { ordersCollection } = await getCollections();
     const orderInfo = req.body;
@@ -187,6 +199,21 @@ app.post('/orders', async (req, res) => {
         });
     }
     const result = await ordersCollection.insertOne(orderInfo);
+    res.send(result)
+})
+
+app.patch('/orders/:id', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const id = req.params.id;
+    const status = req.body.status;
+    console.log(req.body, status)
+    const query = { _id: new ObjectId(id) };
+    const updateStatus = {
+        $set: {
+            status: status
+        }
+    };
+    const result = await ordersCollection.updateOne(query, updateStatus);
     res.send(result)
 })
 
