@@ -172,6 +172,7 @@ app.patch('/products/:id/toggle', async (req, res) => {
 app.post('/orders', async (req, res) => {
     const { ordersCollection } = await getCollections();
     const orderInfo = req.body;
+    orderInfo.status = 'pending';
     orderInfo.createdAt = new Date();
     const { productId, email, status } = orderInfo;
     const duplicate = await ordersCollection.findOne({
@@ -189,12 +190,20 @@ app.post('/orders', async (req, res) => {
     res.send(result)
 })
 
-app.get('/orders', async(req,res) => {
+app.get('/orders', async (req, res) => {
     const { ordersCollection } = await getCollections();
     const status = req.params.status;
     console.log(status);
     const cursor = ordersCollection.find();
     const result = await cursor.toArray();
+    res.send(result)
+})
+
+app.get('/orders/:id', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await ordersCollection.findOne(query);
     res.send(result)
 })
 
