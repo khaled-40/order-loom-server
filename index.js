@@ -4,7 +4,17 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 require('dotenv').config();
 const stripe = require('stripe')(`${process.env.STRIPE_SECRET}`);
+const crypto = require("crypto");
 const port = process.env.PORT || 3000;
+
+
+const generateTrackingId = () => {
+    const prefix = "ORDR";
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+
+    return `${prefix}-${date}-${random}`;
+}
 
 // middlewire
 app.use(cors());
@@ -184,9 +194,14 @@ app.get('/orders/:email/byEmail', async (req, res) => {
 app.post('/orders', async (req, res) => {
     const { ordersCollection } = await getCollections();
     const orderInfo = req.body;
-    orderInfo.status = 'pending';
-    orderInfo.createdAt = new Date();
-    const { productId, email, status } = orderInfo;
+    const status = 'pending';
+    orderInfo.status = status;
+    const loggedAt = new Date();
+    orderInfo.placedAt = loggedAt;
+    const trackingId = generateTrackingId();
+    orderInfo.trackingId = trackingId;
+    const trackingInfo = { trackingId, status, loggedAt }
+    const { productId, email } = orderInfo;
     const duplicate = await ordersCollection.findOne({
         productId,
         email,
@@ -198,23 +213,29 @@ app.post('/orders', async (req, res) => {
             message: 'You already ordered this item'
         });
     }
+    const trackingResult = await trackingsCollection.insertOne(trackingInfo)
     const result = await ordersCollection.insertOne(orderInfo);
     res.send(result)
 })
 
 app.patch('/orders/:id', async (req, res) => {
-    const { ordersCollection } = await getCollections();
+    const { ordersCollection,trackingsCollection } = await getCollections();
     const id = req.params.id;
     const status = req.body.status;
-    console.log(req.body, status)
+    const trackingId = req.body.trackingId;
+    const loggedAt = new Date();
+    const newTrackingsInfo = { trackingId, status, loggedAt };
+    const trackingsResult = await trackingsCollection.insertOne(newTrackingsInfo);
+
     const query = { _id: new ObjectId(id) };
     const updateStatus = {
         $set: {
-            status: status
+            status: status,
+            approvedAt: new Date()
         }
     };
     const result = await ordersCollection.updateOne(query, updateStatus);
-    res.send(result)
+    res.send(result, trackingsResult)
 })
 
 app.get('/orders', async (req, res) => {
