@@ -5,6 +5,7 @@ const app = express()
 require('dotenv').config();
 const stripe = require('stripe')(`${process.env.STRIPE_SECRET}`);
 const crypto = require("crypto");
+const { ORDER_FLOW } = require('./constants/order_flow');
 const port = process.env.PORT || 3000;
 
 
@@ -54,6 +55,10 @@ async function getCollections() {
 
 getCollections().catch(console.error);
 
+// Order Flow realted API 
+app.get('/order-flow', (req, res) => {
+    res.send(ORDER_FLOW);
+});
 
 // user related APIs
 app.post('/users', async (req, res) => {
@@ -104,20 +109,20 @@ app.get('/latest-products', async (req, res) => {
 
 app.get('/products', async (req, res) => {
     const { productsCollection } = await getCollections();
+    const email = req.query.email;
+    const query = { createdByUserEmail: email };
+    const result = await productsCollection.findOne(query);
+    res.send(result);
+})
+
+
+app.get('/products', async (req, res) => {
+    const { productsCollection } = await getCollections();
     const cursor = productsCollection.find();
     const result = await cursor.toArray();
     res.send(result)
 })
 
-app.get('/products/:email/byEmail', async (req, res) => {
-    const { productsCollection } = await getCollections();
-    const email = req.params.email;
-    console.log(email)
-    const query = { createdByUserEmail: email };
-    const cursor = productsCollection.find(query);
-    const result = await cursor.toArray();
-    res.send(result);
-})
 
 app.get('/products/:id', async (req, res) => {
     const { productsCollection } = await getCollections();
@@ -132,6 +137,12 @@ app.post('/products', async (req, res) => {
     //   console.log(req.headers)
     const newProduct = req.body;
     newProduct.createdAt = new Date();
+    const email = req.body.email;
+    const query = { createdByUserEmail: email }
+    const duplicate = await productsCollection.find(query);
+    if (duplicate) {
+        return res.status(409).send({ message: 'You have already added a product' })
+    }
     const result = await productsCollection.insertOne(newProduct);
     res.send(result)
 })
@@ -180,14 +191,34 @@ app.patch('/products/:id/toggle', async (req, res) => {
 })
 
 // Order related APIs 
-app.get('/orders/:email/byEmail', async (req, res) => {
+app.get('/orders/:productId', async (req, res) => {
     const { ordersCollection } = await getCollections();
-    const email = req.params.email;
-    const status = req.query.status
-    console.log(email)
-    const query = { email, status };
+    const status = req.query.status;
+    const productId = req.params.productId;
+    const query = { productId };
+    if (status === 'pending') {
+        query.status = 'pending'
+    }
+    else {
+        query.status = { $nin: ['pending', 'completed'] };
+    }
     const cursor = ordersCollection.find(query);
     const result = await cursor.toArray();
+    res.send(result)
+})
+
+
+app.get('/orders', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const email = req.query.email;
+    console.log(email)
+    let query = {};
+    query.status = { $nin: ['pending', 'completed'] };
+    query.email = email;
+    console.log(query)
+    const cursor = ordersCollection.find(query);
+    const result = await cursor.toArray();
+    console.log(result)
     res.send(result);
 })
 
@@ -219,21 +250,41 @@ app.post('/orders', async (req, res) => {
 })
 
 app.patch('/orders/:id', async (req, res) => {
-    const { ordersCollection,trackingsCollection } = await getCollections();
+    const { ordersCollection, trackingsCollection } = await getCollections();
+    console.log(req.body);
     const id = req.params.id;
     const status = req.body.status;
+    const location = req.body.location;
+    const note = req.body.note;
     const trackingId = req.body.trackingId;
     const loggedAt = new Date();
-    const newTrackingsInfo = { trackingId, status, loggedAt };
+    let newTrackingsInfo = {};
+    if (status === 'approved') {
+        newTrackingsInfo = { trackingId, status, loggedAt };
+    }
+    else {
+        newTrackingsInfo = { trackingId, status, loggedAt, location, note };
+    }
     const trackingsResult = await trackingsCollection.insertOne(newTrackingsInfo);
 
     const query = { _id: new ObjectId(id) };
-    const updateStatus = {
-        $set: {
-            status: status,
-            approvedAt: new Date()
+    let updateStatus = {};
+    if (status === 'approved') {
+        updateStatus = {
+            $set: {
+                status: status,
+                approvedAt: new Date()
+            }
+        };
+    }
+    else {
+        updateStatus = {
+            $set: {
+                status: status
+            }
         }
-    };
+    }
+
     const result = await ordersCollection.updateOne(query, updateStatus);
     res.send(result, trackingsResult)
 })
