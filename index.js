@@ -109,17 +109,25 @@ app.get('/latest-products', async (req, res) => {
 
 app.get('/products', async (req, res) => {
     const { productsCollection } = await getCollections();
-    const email = req.query.email;
-    const query = { createdByUserEmail: email };
-    const result = await productsCollection.findOne(query);
+    const result = await productsCollection.find().toArray();
     res.send(result);
 })
 
-
-app.get('/products', async (req, res) => {
+app.get('/allproducts/byEmail', async (req, res) => {
     const { productsCollection } = await getCollections();
-    const cursor = productsCollection.find();
-    const result = await cursor.toArray();
+    const email = req.query.email;
+    const query = { createdByUserEmail: email };
+    // console.log('hello')
+    const result = await productsCollection.find(query).toArray();
+    res.send(result)
+})
+
+app.get('/products/byEmail', async (req, res) => {
+    const { productsCollection } = await getCollections();
+    const email = req.query.email;
+    const query = { createdByUserEmail: email };
+    console.log('email is getting id')
+    const result = await productsCollection.findOne(query);
     res.send(result)
 })
 
@@ -191,7 +199,25 @@ app.patch('/products/:id/toggle', async (req, res) => {
 })
 
 // Order related APIs 
-app.get('/orders/:productId', async (req, res) => {
+app.get('/orders/byEmail', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const email = req.query.email;
+    const query = { email };
+    console.log(email)
+    const result = await ordersCollection.find(query).toArray();
+    res.send(result)
+})
+
+app.get('/orders/:id', async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const id = req.params.id;
+    console.log('rijon')
+    const query = { _id: new ObjectId(id) };
+    const result = await ordersCollection.findOne(query);
+    res.send(result)
+})
+
+app.get('/orders/by-product/:productId', async (req, res) => {
     const { ordersCollection } = await getCollections();
     const status = req.query.status;
     const productId = req.params.productId;
@@ -207,20 +233,15 @@ app.get('/orders/:productId', async (req, res) => {
     res.send(result)
 })
 
-
 app.get('/orders', async (req, res) => {
     const { ordersCollection } = await getCollections();
-    const email = req.query.email;
-    console.log(email)
-    let query = {};
-    query.status = { $nin: ['pending', 'completed'] };
-    query.email = email;
-    console.log(query)
-    const cursor = ordersCollection.find(query);
+    console.log('order')
+    const cursor = ordersCollection.find();
     const result = await cursor.toArray();
-    console.log(result)
-    res.send(result);
+    res.send(result)
 })
+
+
 
 app.post('/orders', async (req, res) => {
     const { ordersCollection } = await getCollections();
@@ -289,22 +310,8 @@ app.patch('/orders/:id', async (req, res) => {
     res.send(result, trackingsResult)
 })
 
-app.get('/orders', async (req, res) => {
-    const { ordersCollection } = await getCollections();
-    const status = req.params.status;
-    console.log(status);
-    const cursor = ordersCollection.find();
-    const result = await cursor.toArray();
-    res.send(result)
-})
 
-app.get('/orders/:id', async (req, res) => {
-    const { ordersCollection } = await getCollections();
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
-    const result = await ordersCollection.findOne(query);
-    res.send(result)
-})
+
 
 // Payment related APIs
 app.post("/create-checkout-session", async (req, res) => {
