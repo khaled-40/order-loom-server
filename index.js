@@ -7,6 +7,30 @@ const stripe = require('stripe')(`${process.env.STRIPE_SECRET}`);
 const crypto = require("crypto");
 const { ORDER_FLOW } = require('./constants/order_flow');
 const port = process.env.PORT || 3000;
+var admin = require("firebase-admin");
+
+let serviceAccount;
+try {
+    if (!process.env.FB_SERVICE_KEY) {
+        throw new Error('FB_SERVICE_KEY environment variable is not set');
+    }
+
+    const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8');
+
+    // Log first few characters to verify (remove in production)
+    // console.log('Decoded string preview:', decoded.substring(0, 50));
+
+    serviceAccount = JSON.parse(decoded);
+    console.log('Firebase service account loaded successfully');
+} catch (error) {
+    console.error('Failed to parse Firebase service account:', error.message);
+    console.error('Full error:', error);
+    process.exit(1); // Exit gracefully instead of crashing
+}
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
 
 
 const generateTrackingId = () => {
@@ -20,6 +44,24 @@ const generateTrackingId = () => {
 // middlewire
 app.use(cors());
 app.use(express.json());
+
+const verifyFBToken = async (req, res, next) => {
+    // console.log(req.headers.authorization);
+    const token = req.headers.authorization;
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+    console.log('firebase is verifying')
+    try {
+        const idToken = token.split(' ')[1];
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        // console.log('after decoded', decoded)
+        req.decoded_email = decoded.email;
+        next()
+    } catch (err) {
+        res.status(401).send({ message: 'unauthorized error' });
+    }
+}
 
 // mongodb connection 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.uk3n3pp.mongodb.net/?appName=Cluster0`;
@@ -54,6 +96,30 @@ async function getCollections() {
 }
 
 getCollections().catch(console.error);
+
+// middleware with database access
+const verifyAdmin = async (req, res, next) => {
+    const { usersCollection } = await getCollections();
+    const email = req.decoded_email;
+    const query = { email };
+    const user = await usersCollection.findOne(query);
+    if (!user || user.role !== 'admin') {
+        return res.status(403).send({ message: 'forbidden access' })
+    }
+    next();
+}
+
+
+const verifyManager = async (req, res, next) => {
+    const { usersCollection } = await getCollections();
+    const email = req.decoded_email;
+    const query = { email };
+    const user = await usersCollection.findOne(query);
+    if (!user || user.role !== 'manager') {
+        return res.status(403).send({ message: 'forbidden access' })
+    }
+    next();
+}
 
 // Order Flow realted API 
 app.get('/order-flow', (req, res) => {
@@ -96,6 +162,14 @@ app.patch('/users/:id', async (req, res) => {
     };
     const result = await usersCollection.updateOne(query, update);
     res.send(result)
+})
+app.get('/user/:email/role', async (req, res) => {
+    const { usersCollection } = await getCollections();
+    const email = req.params.email;
+    // console.log(email);
+    const query = { email };
+    const user = await usersCollection.findOne(query);
+    res.send({ role: user?.role || 'user' });
 })
 
 // Product related APIs
@@ -140,14 +214,14 @@ app.get('/products/:id', async (req, res) => {
     res.send(result)
 })
 
-app.post('/products', async (req, res) => {
+app.post('/products', verifyFBToken, verifyManager, async (req, res) => {
     const { productsCollection } = await getCollections();
     //   console.log(req.headers)
     const newProduct = req.body;
     newProduct.createdAt = new Date();
-    const email = req.body.email;
+    const email = newProduct.createdByUserEmail;
     const query = { createdByUserEmail: email }
-    const duplicate = await productsCollection.find(query);
+    const duplicate = await productsCollection.findOne(query);
     if (duplicate) {
         return res.status(409).send({ message: 'You have already added a product' })
     }
@@ -199,7 +273,7 @@ app.patch('/products/:id/toggle', async (req, res) => {
 })
 
 // Order related APIs 
-app.get('/orders/byEmail', async (req, res) => {
+app.get('/orders/byEmail', verifyFBToken, async (req, res) => {
     const { ordersCollection } = await getCollections();
     const email = req.query.email;
     const query = { email };
@@ -310,7 +384,12 @@ app.patch('/orders/:id', async (req, res) => {
     res.send(result, trackingsResult)
 })
 
-
+app.delete('/orders/:id', async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await ordersCollection.deleteOne(query);
+    res.send(result)
+})
 
 
 // Payment related APIs
