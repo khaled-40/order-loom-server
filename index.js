@@ -51,7 +51,6 @@ const verifyFBToken = async (req, res, next) => {
     if (!token) {
         return res.status(401).send({ message: 'unauthorized access' })
     }
-    console.log('firebase is verifying')
     try {
         const idToken = token.split(' ')[1];
         const decoded = await admin.auth().verifyIdToken(idToken);
@@ -125,6 +124,18 @@ const verifyManager = async (req, res, next) => {
 app.get('/order-flow', (req, res) => {
     res.send(ORDER_FLOW);
 });
+
+// Tracking realted API
+app.get('/trackings/:trackignId/log', async (req, res) => {
+    const { trackingsCollection } = await getCollections();
+    const trackingId = req.params.trackignId;
+    console.log(trackingId)
+    const query = { trackingId };
+    const cursor = trackingsCollection.find(query);
+    const result = await cursor.toArray();
+    console.log(result)
+    res.send(result)
+})
 
 // user related APIs
 app.post('/users', async (req, res) => {
