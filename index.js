@@ -81,8 +81,8 @@ async function getCollections() {
     await client.connect();
 
     //  Ping the admin DB to make sure connection is successful
-    await client.db("admin").command({ ping: 1 });
-    console.log("MongoDB Ping Success — Connected to cluster!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("MongoDB Ping Success — Connected to cluster!");
 
     const db = client.db('order_loom');
     productsCollection = db.collection('products');
@@ -90,7 +90,7 @@ async function getCollections() {
     trackingsCollection = db.collection('trackings');
     // contributionCollection = db.collection('contribution');
     usersCollection = db.collection('users');
-    console.log('MongoDB connected (reused on next calls)');
+    // console.log('MongoDB connected (reused on next calls)');
     return { productsCollection, usersCollection, ordersCollection, trackingsCollection };
 }
 
@@ -120,13 +120,24 @@ const verifyManager = async (req, res, next) => {
     next();
 }
 
+const verifyBuyer = async (req, res, next) => {
+    const { usersCollection } = await getCollections();
+    const email = req.decoded_email;
+    const query = { email };
+    const user = await usersCollection.findOne(query);
+    if (!user || user.role !== 'buyer') {
+        return res.status(403).send({ message: 'forbidden access' })
+    }
+    next();
+}
+
 // Order Flow realted API 
-app.get('/order-flow', (req, res) => {
+app.get('/order-flow',verifyFBToken,verifyManager, (req, res) => {
     res.send(ORDER_FLOW);
 });
 
 // Tracking realted API
-app.get('/trackings/:trackignId/log', async (req, res) => {
+app.get('/trackings/:trackignId/log',verifyFBToken, async (req, res) => {
     const { trackingsCollection } = await getCollections();
     const trackingId = req.params.trackignId;
     console.log(trackingId)
@@ -143,6 +154,7 @@ app.post('/users', async (req, res) => {
     const user = req.body;
     user.createdAt = new Date();
     const email = user.email;
+    user.adminApproval = "not checked";
     console.log(email);
     const userExist = await usersCollection.findOne({ email })
 
@@ -153,14 +165,14 @@ app.post('/users', async (req, res) => {
     res.send(result)
 })
 
-app.get('/users', async (req, res) => {
+app.get('/users',verifyFBToken,verifyAdmin, async (req, res) => {
     const { usersCollection } = await getCollections();
     const cursor = usersCollection.find();
     const result = await cursor.toArray();
     res.send(result)
 })
 
-app.patch('/users/:id', async (req, res) => {
+app.patch('/users/:id',verifyFBToken,verifyAdmin, async (req, res) => {
     const { usersCollection } = await getCollections();
     const id = req.params.id;
     const { status } = req.body;
@@ -174,20 +186,30 @@ app.patch('/users/:id', async (req, res) => {
     const result = await usersCollection.updateOne(query, update);
     res.send(result)
 })
-app.get('/user/:email/role', async (req, res) => {
+app.get('/user/:email/role',verifyFBToken, async (req, res) => {
     const { usersCollection } = await getCollections();
     const email = req.params.email;
     // console.log(email);
     const query = { email };
     const user = await usersCollection.findOne(query);
-    res.send({ role: user?.role || 'user' });
+    res.send({ role: user?.role });
+})
+
+app.get('/user/byEmail',verifyFBToken, async (req, res) => {
+    const { usersCollection } = await getCollections();
+    const email = req.query.email;
+    console.log(email)
+    const query = { email };
+    const result = await usersCollection.findOne(query);
+    res.send(result)
 })
 
 // Product related APIs
 
 app.get('/latest-products', async (req, res) => {
     const { productsCollection } = await getCollections();
-    const cursor = productsCollection.find().sort({ date: -1 }).limit(6);
+    const query = { showOnHome: true }
+    const cursor = productsCollection.find(query).sort({ createdAt: -1 }).limit(6);
     const result = await cursor.toArray();
     res.send(result);
 })
@@ -198,7 +220,7 @@ app.get('/products', async (req, res) => {
     res.send(result);
 })
 
-app.get('/allproducts/byEmail', async (req, res) => {
+app.get('/allproducts/byEmail', verifyFBToken, verifyManager, async (req, res) => {
     const { productsCollection } = await getCollections();
     const email = req.query.email;
     const query = { createdByUserEmail: email };
@@ -207,19 +229,19 @@ app.get('/allproducts/byEmail', async (req, res) => {
     res.send(result)
 })
 
-app.get('/products/byEmail', async (req, res) => {
+app.get('/products/byEmail', verifyFBToken, async (req, res) => {
     const { productsCollection } = await getCollections();
     const email = req.query.email;
     const query = { createdByUserEmail: email };
-    console.log('email is getting id')
     const result = await productsCollection.findOne(query);
     res.send(result)
 })
 
 
-app.get('/products/:id', async (req, res) => {
+app.get('/products/:id',verifyFBToken,  async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
+    console.log(id, 'paisi')
     const query = { _id: new ObjectId(id) };
     const result = await productsCollection.findOne(query);
     res.send(result)
@@ -228,7 +250,13 @@ app.get('/products/:id', async (req, res) => {
 app.post('/products', verifyFBToken, verifyManager, async (req, res) => {
     const { productsCollection } = await getCollections();
     //   console.log(req.headers)
-    const newProduct = req.body;
+    console.log(req.body)
+    const { data: newProduct, adminApproval } = req.body;
+    if (adminApproval !== 'approved') {
+        return res.status(403).send({
+            message: `Your account status is ${adminApproval}`
+        })
+    }
     newProduct.createdAt = new Date();
     const email = newProduct.createdByUserEmail;
     const query = { createdByUserEmail: email }
@@ -240,7 +268,7 @@ app.post('/products', verifyFBToken, verifyManager, async (req, res) => {
     res.send(result)
 })
 
-app.patch('/products', async (req, res) => {
+app.patch('/products', verifyFBToken, async (req, res) => {
     const { productsCollection } = await getCollections();
     const newProduct = req.body;
 
@@ -261,7 +289,7 @@ app.patch('/products', async (req, res) => {
     res.send(result)
 })
 
-app.delete('/products/:id', async (req, res) => {
+app.delete('/products/:id', verifyFBToken, async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
     const query = { _id: new ObjectId(id) };
@@ -269,7 +297,7 @@ app.delete('/products/:id', async (req, res) => {
     res.send(result)
 })
 
-app.patch('/products/:id/toggle', async (req, res) => {
+app.patch('/products/:id/toggle', verifyFBToken, verifyAdmin, async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
     const { toggle } = req.body;
@@ -288,21 +316,19 @@ app.get('/orders/byEmail', verifyFBToken, async (req, res) => {
     const { ordersCollection } = await getCollections();
     const email = req.query.email;
     const query = { email };
-    console.log(email)
     const result = await ordersCollection.find(query).toArray();
     res.send(result)
 })
 
-app.get('/orders/:id', async (req, res) => {
+app.get('/orders/:id',verifyFBToken, async (req, res) => {
     const { ordersCollection } = await getCollections();
     const id = req.params.id;
-    console.log('rijon')
     const query = { _id: new ObjectId(id) };
     const result = await ordersCollection.findOne(query);
     res.send(result)
 })
 
-app.get('/orders/by-product/:productId', async (req, res) => {
+app.get('/orders/by-product/:productId',verifyFBToken,verifyManager, async (req, res) => {
     const { ordersCollection } = await getCollections();
     const status = req.query.status;
     const productId = req.params.productId;
@@ -318,7 +344,7 @@ app.get('/orders/by-product/:productId', async (req, res) => {
     res.send(result)
 })
 
-app.get('/orders', async (req, res) => {
+app.get('/orders', verifyFBToken, verifyAdmin, async (req, res) => {
     const { ordersCollection } = await getCollections();
     console.log('order')
     const cursor = ordersCollection.find();
@@ -328,17 +354,23 @@ app.get('/orders', async (req, res) => {
 
 
 
-app.post('/orders', async (req, res) => {
+app.post('/orders',verifyFBToken,verifyBuyer, async (req, res) => {
     const { ordersCollection } = await getCollections();
-    const orderInfo = req.body;
+    const { paymentInfo, adminApproval } = req.body;
+    console.log(paymentInfo, adminApproval)
+    if (adminApproval !== 'approved') {
+        return res.status(403).send({
+            message: `Your account status is ${adminApproval}`
+        })
+    }
     const status = 'pending';
-    orderInfo.status = status;
+    paymentInfo.status = status;
     const loggedAt = new Date();
-    orderInfo.placedAt = loggedAt;
+    paymentInfo.placedAt = loggedAt;
     const trackingId = generateTrackingId();
-    orderInfo.trackingId = trackingId;
-    const trackingInfo = { trackingId, status, loggedAt }
-    const { productId, email } = orderInfo;
+    paymentInfo.trackingId = trackingId;
+    const trackingInfo = { trackingId, status, loggedAt };
+    const { productId, email } = paymentInfo;
     const duplicate = await ordersCollection.findOne({
         productId,
         email,
@@ -351,14 +383,21 @@ app.post('/orders', async (req, res) => {
         });
     }
     const trackingResult = await trackingsCollection.insertOne(trackingInfo)
-    const result = await ordersCollection.insertOne(orderInfo);
-    res.send(result)
+    const result = await ordersCollection.insertOne(paymentInfo);
+    res.send(result,trackingResult)
 })
 
-app.patch('/orders/:id', async (req, res) => {
+app.patch('/orders/:id',verifyFBToken, async (req, res) => {
     const { ordersCollection, trackingsCollection } = await getCollections();
     console.log(req.body);
     const id = req.params.id;
+    const adminApproval = req.body.adminApproval;
+    console.log(adminApproval)
+    if (adminApproval !== 'approved') {
+        return res.status(403).send({
+            message: `Your account status is ${adminApproval}`
+        })
+    }
     const status = req.body.status;
     const location = req.body.location;
     const note = req.body.note;
@@ -437,6 +476,8 @@ app.get('/', (req, res) => {
     res.send('Hello World!')
 })
 
-app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+// app.listen(port, () => {
+//     console.log(`Example app listening on port ${port}`)
+// })
+
+module.exports = app;

@@ -1,3 +1,4 @@
 node_modules
 .env
 order-loom-firebase-adminsdk-fbsvc-bb0433841f.json
+.vercel
