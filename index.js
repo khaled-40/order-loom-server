@@ -137,9 +137,9 @@ app.get('/order-flow',verifyFBToken,verifyManager, (req, res) => {
 });
 
 // Tracking realted API
-app.get('/trackings/:trackignId/log',verifyFBToken, async (req, res) => {
+app.get('/trackings/:trackingId/log',verifyFBToken, async (req, res) => {
     const { trackingsCollection } = await getCollections();
-    const trackingId = req.params.trackignId;
+    const trackingId = req.params.trackingId;
     console.log(trackingId)
     const query = { trackingId };
     const cursor = trackingsCollection.find(query);
