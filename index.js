@@ -132,12 +132,12 @@ const verifyBuyer = async (req, res, next) => {
 }
 
 // Order Flow realted API 
-app.get('/order-flow',verifyFBToken,verifyManager, (req, res) => {
+app.get('/order-flow', verifyFBToken, verifyManager, (req, res) => {
     res.send(ORDER_FLOW);
 });
 
 // Tracking realted API
-app.get('/trackings/:trackingId/log',verifyFBToken, async (req, res) => {
+app.get('/trackings/:trackingId/log', verifyFBToken, async (req, res) => {
     const { trackingsCollection } = await getCollections();
     const trackingId = req.params.trackingId;
     console.log(trackingId)
@@ -165,14 +165,14 @@ app.post('/users', async (req, res) => {
     res.send(result)
 })
 
-app.get('/users',verifyFBToken,verifyAdmin, async (req, res) => {
+app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
     const { usersCollection } = await getCollections();
     const cursor = usersCollection.find();
     const result = await cursor.toArray();
     res.send(result)
 })
 
-app.patch('/users/:id',verifyFBToken,verifyAdmin, async (req, res) => {
+app.patch('/users/:id', verifyFBToken, verifyAdmin, async (req, res) => {
     const { usersCollection } = await getCollections();
     const id = req.params.id;
     const { status } = req.body;
@@ -186,7 +186,7 @@ app.patch('/users/:id',verifyFBToken,verifyAdmin, async (req, res) => {
     const result = await usersCollection.updateOne(query, update);
     res.send(result)
 })
-app.get('/user/:email/role',verifyFBToken, async (req, res) => {
+app.get('/user/:email/role', verifyFBToken, async (req, res) => {
     const { usersCollection } = await getCollections();
     const email = req.params.email;
     // console.log(email);
@@ -195,7 +195,7 @@ app.get('/user/:email/role',verifyFBToken, async (req, res) => {
     res.send({ role: user?.role });
 })
 
-app.get('/user/byEmail',verifyFBToken, async (req, res) => {
+app.get('/user/byEmail', verifyFBToken, async (req, res) => {
     const { usersCollection } = await getCollections();
     const email = req.query.email;
     console.log(email)
@@ -238,7 +238,7 @@ app.get('/products/byEmail', verifyFBToken, async (req, res) => {
 })
 
 
-app.get('/products/:id',verifyFBToken,  async (req, res) => {
+app.get('/products/:id', verifyFBToken, async (req, res) => {
     const { productsCollection } = await getCollections();
     const id = req.params.id;
     console.log(id, 'paisi')
@@ -258,12 +258,6 @@ app.post('/products', verifyFBToken, verifyManager, async (req, res) => {
         })
     }
     newProduct.createdAt = new Date();
-    const email = newProduct.createdByUserEmail;
-    const query = { createdByUserEmail: email }
-    const duplicate = await productsCollection.findOne(query);
-    if (duplicate) {
-        return res.status(409).send({ message: 'You have already added a product' })
-    }
     const result = await productsCollection.insertOne(newProduct);
     res.send(result)
 })
@@ -320,19 +314,12 @@ app.get('/orders/byEmail', verifyFBToken, async (req, res) => {
     res.send(result)
 })
 
-app.get('/orders/:id',verifyFBToken, async (req, res) => {
+app.get('/orders/by-manager-email', verifyFBToken, verifyManager, async (req, res) => {
     const { ordersCollection } = await getCollections();
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
-    const result = await ordersCollection.findOne(query);
-    res.send(result)
-})
-
-app.get('/orders/by-product/:productId',verifyFBToken,verifyManager, async (req, res) => {
-    const { ordersCollection } = await getCollections();
-    const status = req.query.status;
-    const productId = req.params.productId;
-    const query = { productId };
+    const email = req.decoded_email;
+    const { status } = req.query;
+    console.log(email, status);
+    const query = { manager_email: email };
     if (status === 'pending') {
         query.status = 'pending'
     }
@@ -344,6 +331,16 @@ app.get('/orders/by-product/:productId',verifyFBToken,verifyManager, async (req,
     res.send(result)
 })
 
+app.get('/orders/:id', verifyFBToken, async (req, res) => {
+    const { ordersCollection } = await getCollections();
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await ordersCollection.findOne(query);
+    res.send(result)
+})
+
+
+
 app.get('/orders', verifyFBToken, verifyAdmin, async (req, res) => {
     const { ordersCollection } = await getCollections();
     console.log('order')
@@ -354,7 +351,7 @@ app.get('/orders', verifyFBToken, verifyAdmin, async (req, res) => {
 
 
 
-app.post('/orders',verifyFBToken,verifyBuyer, async (req, res) => {
+app.post('/orders', verifyFBToken, verifyBuyer, async (req, res) => {
     const { ordersCollection } = await getCollections();
     const { paymentInfo, adminApproval } = req.body;
     console.log(paymentInfo, adminApproval)
@@ -384,10 +381,10 @@ app.post('/orders',verifyFBToken,verifyBuyer, async (req, res) => {
     }
     const trackingResult = await trackingsCollection.insertOne(trackingInfo)
     const result = await ordersCollection.insertOne(paymentInfo);
-    res.send(result,trackingResult)
+    res.send(result, trackingResult)
 })
 
-app.patch('/orders/:id',verifyFBToken, async (req, res) => {
+app.patch('/orders/:id', verifyFBToken, async (req, res) => {
     const { ordersCollection, trackingsCollection } = await getCollections();
     console.log(req.body);
     const id = req.params.id;
