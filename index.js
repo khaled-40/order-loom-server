@@ -441,7 +441,7 @@ app.delete('/orders/:id', async (req, res) => {
 
 // Payment related APIs
 app.post("/create-checkout-session", async (req, res) => {
-    const { productTitle, quantity, unitPrice } = req.body;
+    const { product, quantity, unit_price } = req.body;
 
     try {
         const session = await stripe.checkout.sessions.create({
@@ -452,9 +452,9 @@ app.post("/create-checkout-session", async (req, res) => {
                     price_data: {
                         currency: "usd",
                         product_data: {
-                            name: productTitle,
+                            name: product,
                         },
-                        unit_amount: Math.round(unitPrice * 100), // cents
+                        unit_amount: Math.round(unit_price * 100), // cents
                     },
                     quantity,
                 },
