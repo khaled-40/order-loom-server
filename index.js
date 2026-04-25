@@ -186,10 +186,10 @@ app.patch('/users/:id', verifyFBToken, verifyAdmin, async (req, res) => {
     const result = await usersCollection.updateOne(query, update);
     res.send(result)
 })
-app.get('/user/:email/role', verifyFBToken, async (req, res) => {
+app.get('/user/role', verifyFBToken, async (req, res) => {
     const { usersCollection } = await getCollections();
-    const email = req.params.email;
-    // console.log(email);
+    const email = req.decoded_email;
+    console.log(email);
     const query = { email };
     const user = await usersCollection.findOne(query);
     res.send({ role: user?.role });
@@ -197,7 +197,7 @@ app.get('/user/:email/role', verifyFBToken, async (req, res) => {
 
 app.get('/user/byEmail', verifyFBToken, async (req, res) => {
     const { usersCollection } = await getCollections();
-    const email = req.query.email;
+    const email = req.decoded_email;
     console.log(email)
     const query = { email };
     const result = await usersCollection.findOne(query);
@@ -222,18 +222,10 @@ app.get('/products', async (req, res) => {
 
 app.get('/allproducts/byEmail', verifyFBToken, verifyManager, async (req, res) => {
     const { productsCollection } = await getCollections();
-    const email = req.query.email;
+    const email = req.decoded_email;
     const query = { createdByUserEmail: email };
     // console.log('hello')
     const result = await productsCollection.find(query).toArray();
-    res.send(result)
-})
-
-app.get('/products/byEmail', verifyFBToken, async (req, res) => {
-    const { productsCollection } = await getCollections();
-    const email = req.query.email;
-    const query = { createdByUserEmail: email };
-    const result = await productsCollection.findOne(query);
     res.send(result)
 })
 
@@ -308,7 +300,7 @@ app.patch('/products/:id/toggle', verifyFBToken, verifyAdmin, async (req, res) =
 // Order related APIs 
 app.get('/orders/byEmail', verifyFBToken, async (req, res) => {
     const { ordersCollection } = await getCollections();
-    const email = req.query.email;
+    const email = req.decoded_email;
     const query = { email };
     const result = await ordersCollection.find(query).toArray();
     res.send(result)
