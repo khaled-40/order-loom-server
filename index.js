@@ -204,6 +204,14 @@ app.get('/user/byEmail', verifyFBToken, async (req, res) => {
     res.send(result)
 })
 
+app.delete('/user/:id', verifyFBToken, verifyAdmin, async (req, res) => {
+    const { usersCollection } = await getCollections();
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await usersCollection.deleteOne(query);
+    res.send(result)
+})
+
 // Product related APIs
 
 app.get('/latest-products', async (req, res) => {
