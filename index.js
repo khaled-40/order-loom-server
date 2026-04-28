@@ -46,18 +46,23 @@ app.use(cors());
 app.use(express.json());
 
 const verifyFBToken = async (req, res, next) => {
-    // console.log(req.headers.authorization);
+    console.log(req.headers.authorization);
     const token = req.headers.authorization;
+    console.log(token)
     if (!token) {
-        return res.status(401).send({ message: 'unauthorized access' })
+        console.log('this is happening')
+        return res.status(401).send({ message: 'unauthorized access' });
     }
     try {
         const idToken = token.split(' ')[1];
+        console.log(idToken)
         const decoded = await admin.auth().verifyIdToken(idToken);
-        // console.log('after decoded', decoded)
+        console.log('after decoded', decoded)
         req.decoded_email = decoded.email;
         next()
     } catch (err) {
+        console.error(err);
+        console.log(err)
         res.status(401).send({ message: 'unauthorized error' });
     }
 }
@@ -167,9 +172,15 @@ app.post('/users', async (req, res) => {
 
 app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
     const { usersCollection } = await getCollections();
-    const cursor = usersCollection.find();
+    const { limit = 0, skip = 0, search = "" } = req.query;
+    let query = {};
+    if (search) {
+        query.name = { $regex: search, $options: "i" };
+    }
+    const cursor = usersCollection.find(query).limit(Number(limit)).skip(Number(skip));
     const result = await cursor.toArray();
-    res.send(result)
+    const toatlUsers = await usersCollection.countDocuments(query);
+    res.send({ result, toatlUsers })
 })
 
 app.patch('/users/:id', verifyFBToken, verifyAdmin, async (req, res) => {
